@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="localhost" port="8081" doc:name="HTTP Listener Configuration"/>
+    <db:mysql-config name="MySQL_Configuration" host="localhost" port="3306" user="root" password="root" database="kishore" doc:name="MySQL Configuration"/>
+    <flow name="paginationdbFlow" initialState="started">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/pagination" doc:name="HTTP"/>
+        <db:select config-ref="MySQL_Configuration" doc:name="Database">
+            <db:parameterized-query><![CDATA[select customernumber,customerName,contactLastName,contactFirstName,phone,addressLine1,city,country,postalCode,creditLimit from kishore.customers where postalcode is not null and creditLimit > 1]]></db:parameterized-query>
+        </db:select>
+        <dw:transform-message metadata:id="1ed15e75-e2fa-4ff2-b4ad-fff234ae23fa" doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+%var pageIndex = 2
+ %var pageSize = 7
+ %var result = payload
+ %var collectionSize = sizeOf result
+ %var resultStart = pageIndex * pageSize
+ %var resultEndTemp = resultStart + pageSize - 1 
+ %var resultEnd = resultEndTemp when resultEndTemp < collectionSize otherwise collectionSize
+---
+{
+	customers: ( result[[resultStart][0] .. [resultEnd][0]] map ((payload01 , indexOfPayload01) -> {
+		customerNumber: payload01.customernumber,
+		customerName: payload01.customerName,
+		contactLastName: payload01.contactLastName,
+		phone: payload01.phone,
+		addressLine1: payload01.addressLine1,
+		city: payload01.city,
+		postalCode: payload01.postalCode,
+		country: payload01.country,
+		creditlimit: payload01.creditLimit as :number
+	} 
+	) filter ($.creditlimit > 2000 ) orderBy $.customerName ) [-1..0] 
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+        <set-payload value="the json out put is::#[payload]" doc:name="Set Payload"/>
+
+
+    </flow>
+
+</mule>
